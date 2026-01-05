@@ -39,8 +39,9 @@ export class DateDeleteStrategy implements CleanupStrategy {
       { schema: 'timetable_loader', table: 'gtfs_archives', dateColumn: 'generation_date' },
     ]],
     // darwin_ingestor_outbox: outbox_events table (NOT "outbox")
+    // Use created_at because published_at is NULL for unpublished events
     ['darwin_ingestor_outbox', [
-      { schema: 'darwin_ingestor', table: 'outbox_events', dateColumn: 'published_at' },
+      { schema: 'darwin_ingestor', table: 'outbox_events', dateColumn: 'created_at' },
     ]],
   ]);
 
