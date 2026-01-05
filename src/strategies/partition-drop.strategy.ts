@@ -56,12 +56,9 @@ export class PartitionDropStrategy implements CleanupStrategy {
         tablename AS partition_name,
         -- Extract date from partition name (format: table_YYYY_MM)
         -- For darwin_ingestor partitions like delay_services_2024_01
-        CONCAT(
-          SUBSTRING(tablename FROM '_(\\d{4})_(\\d{2})$', 1),
-          '-',
-          SUBSTRING(tablename FROM '_(\\d{4})_(\\d{2})$', 2),
-          '-01'
-        ) AS partition_date
+        -- regexp_match returns array of capture groups
+        (regexp_match(tablename, '_(\\d{4})_(\\d{2})$'))[1] || '-' ||
+        (regexp_match(tablename, '_(\\d{4})_(\\d{2})$'))[2] || '-01' AS partition_date
       FROM pg_tables
       WHERE schemaname = $1
         AND (
