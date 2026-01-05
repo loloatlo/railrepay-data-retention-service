@@ -22,9 +22,13 @@ export interface CleanupHistoryComplete {
   error_message?: string;
 }
 
-export class CleanupHistoryRepository {
-  constructor(private db: any) {}
+interface CleanupHistoryRow {
+  id: string;
+}
 
+import { db } from '../database/client';
+
+export class CleanupHistoryRepository {
   async create(data: CleanupHistoryCreate): Promise<string> {
     const query = `
       INSERT INTO data_retention.cleanup_history
@@ -32,13 +36,16 @@ export class CleanupHistoryRepository {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id
     `;
-    const result = await this.db.one(query, [
+    const result = await db.queryOne<CleanupHistoryRow>(query, [
       data.policy_id,
       data.target_schema,
       data.started_at,
       data.status,
       data.error_message || null,
     ]);
+    if (!result) {
+      throw new Error('Failed to create cleanup history record');
+    }
     return result.id;
   }
 
@@ -54,7 +61,7 @@ export class CleanupHistoryRepository {
         error_message = $7
       WHERE id = $1
     `;
-    await this.db.none(query, [
+    await db.query(query, [
       historyId,
       data.recordsDeleted,
       data.partitionsDropped,

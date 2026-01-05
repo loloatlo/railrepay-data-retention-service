@@ -14,11 +14,16 @@
  */
 
 import type { CleanupStrategy, CleanupResult, RetentionPolicy } from './cleanup-strategy.interface';
+import { db } from '../database/client';
 
 interface TableConfig {
   schema: string;
   table: string;
   dateColumn: string;
+}
+
+interface CountRow {
+  count: string;
 }
 
 export class DateDeleteStrategy implements CleanupStrategy {
@@ -28,8 +33,6 @@ export class DateDeleteStrategy implements CleanupStrategy {
     ['timetable_loader', { schema: 'timetable_loader', table: 'services', dateColumn: 'service_date' }],
     ['darwin_ingestor_outbox', { schema: 'darwin_ingestor', table: 'outbox', dateColumn: 'published_at' }],
   ]);
-
-  constructor(private dbClient: any) {}
 
   async execute(policy: RetentionPolicy, dryRun: boolean): Promise<CleanupResult> {
     const cutoffDate = new Date();
@@ -46,28 +49,19 @@ export class DateDeleteStrategy implements CleanupStrategy {
       // Count records that would be deleted
       const countQuery = `
         SELECT COUNT(*) as count
-        FROM $1:name.$2:name
-        WHERE $3:name < $4
+        FROM "${config.schema}"."${config.table}"
+        WHERE "${config.dateColumn}" < $1
       `;
-      const result = await this.dbClient.result(countQuery, [
-        config.schema,
-        config.table,
-        config.dateColumn,
-        cutoffDate.toISOString(),
-      ]);
-      recordsDeleted = parseInt(result.rows[0].count, 10);
+      const rows = await db.query<CountRow>(countQuery, [cutoffDate.toISOString()]);
+      recordsDeleted = parseInt(rows[0]?.count || '0', 10);
     } else {
-      // Execute DELETE
+      // Execute DELETE using pool for rowCount access
       const deleteQuery = `
-        DELETE FROM $1:name.$2:name
-        WHERE $3:name < $4
+        DELETE FROM "${config.schema}"."${config.table}"
+        WHERE "${config.dateColumn}" < $1
       `;
-      const result = await this.dbClient.result(deleteQuery, [
-        config.schema,
-        config.table,
-        config.dateColumn,
-        cutoffDate.toISOString(),
-      ]);
+      const pool = db.getPool();
+      const result = await pool.query(deleteQuery, [cutoffDate.toISOString()]);
       recordsDeleted = result.rowCount || 0;
     }
 

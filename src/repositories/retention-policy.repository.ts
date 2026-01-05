@@ -6,10 +6,9 @@
  */
 
 import type { RetentionPolicy } from '../strategies/cleanup-strategy.interface';
+import { db } from '../database/client';
 
 export class RetentionPolicyRepository {
-  constructor(private db: any) {}
-
   async findEnabled(): Promise<RetentionPolicy[]> {
     const query = `
       SELECT *
@@ -17,7 +16,7 @@ export class RetentionPolicyRepository {
       WHERE enabled = true
       ORDER BY target_schema
     `;
-    return await this.db.any(query);
+    return await db.query<RetentionPolicy>(query);
   }
 
   async updateLastCleanup(policyId: string, timestamp: Date): Promise<void> {
@@ -26,6 +25,6 @@ export class RetentionPolicyRepository {
       SET last_cleanup_at = $2, updated_at = NOW()
       WHERE id = $1
     `;
-    await this.db.none(query, [policyId, timestamp]);
+    await db.query(query, [policyId, timestamp]);
   }
 }

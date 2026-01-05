@@ -14,11 +14,15 @@
  */
 
 import type { CleanupStrategy, CleanupResult, RetentionPolicy } from './cleanup-strategy.interface';
+import { db } from '../database/client';
+
+interface PartitionRow {
+  partition_name: string;
+  partition_date: string;
+}
 
 export class PartitionDropStrategy implements CleanupStrategy {
   readonly name = 'PartitionDropStrategy';
-
-  constructor(private dbClient: any) {}
 
   async execute(policy: RetentionPolicy, dryRun: boolean): Promise<CleanupResult> {
     const cutoffDate = new Date();
@@ -67,17 +71,18 @@ export class PartitionDropStrategy implements CleanupStrategy {
         AND tablename ~ '_\\d{4}_\\d{2}$'
     `;
 
-    const result = await this.dbClient.query(query, [schema]);
+    const rows = await db.query<PartitionRow>(query, [schema]);
 
     // Filter partitions older than cutoff date
-    return result.rows.filter((row: any) => {
+    return rows.filter((row) => {
       const partitionDate = new Date(row.partition_date);
       return partitionDate < cutoffDate;
     });
   }
 
   private async dropPartition(schema: string, partitionName: string): Promise<void> {
-    const query = `DROP TABLE IF EXISTS $1:name.$2:name`;
-    await this.dbClient.none(query, [schema, partitionName]);
+    // Use identifier quoting for safety (schema.tablename)
+    const query = `DROP TABLE IF EXISTS "${schema}"."${partitionName}"`;
+    await db.query(query);
   }
 }

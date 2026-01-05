@@ -13,19 +13,23 @@
  * Per ADR-007: Uses transactional outbox pattern for event publishing.
  */
 
-import type { RetentionPolicyRepository } from '../repositories/retention-policy.repository';
-import type { CleanupHistoryRepository } from '../repositories/cleanup-history.repository';
+import { RetentionPolicyRepository } from '../repositories/retention-policy.repository';
+import { CleanupHistoryRepository } from '../repositories/cleanup-history.repository';
 import type { CleanupStrategy, RetentionPolicy } from '../strategies/cleanup-strategy.interface';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../config/logger';
+import { db } from '../database/client';
 
 export class CleanupOrchestrator {
+  private policyRepo: RetentionPolicyRepository;
+  private historyRepo: CleanupHistoryRepository;
+
   constructor(
-    private policyRepo: RetentionPolicyRepository,
-    private historyRepo: CleanupHistoryRepository,
-    private db: any,
     private strategies: Map<string, CleanupStrategy>
-  ) {}
+  ) {
+    this.policyRepo = new RetentionPolicyRepository();
+    this.historyRepo = new CleanupHistoryRepository();
+  }
 
   async executeAll(dryRun: boolean): Promise<void> {
     const policies = await this.policyRepo.findEnabled();
@@ -79,46 +83,43 @@ export class CleanupOrchestrator {
         result,
       });
 
-      // Use transaction to ensure atomic write of history + outbox event
-      await this.db.tx(async (t: any) => {
-        // Update history record
-        await this.historyRepo.complete(historyId, {
-          recordsDeleted: result.recordsDeleted,
-          partitionsDropped: result.partitionsDropped,
-          gcsFilesDeleted: result.gcsFilesDeleted,
-          status: 'success',
-          completed_at: new Date(),
-        });
-
-        // Update policy last_cleanup_at
-        await this.policyRepo.updateLastCleanup(policy.id, new Date());
-
-        // Create outbox event (transactional outbox pattern per ADR-007)
-        const correlationId = uuidv4();
-        await t.none(
-          `
-          INSERT INTO data_retention.outbox
-            (aggregate_id, aggregate_type, event_type, payload, correlation_id)
-          VALUES ($1, $2, $3, $4, $5)
-        `,
-          [
-            policy.id,
-            'RetentionPolicy',
-            'cleanup.completed',
-            JSON.stringify({
-              policy_id: policy.id,
-              target_schema: policy.target_schema,
-              cleanup_strategy: policy.cleanup_strategy,
-              records_deleted: result.recordsDeleted,
-              partitions_dropped: result.partitionsDropped,
-              gcs_files_deleted: result.gcsFilesDeleted,
-              dry_run: dryRun,
-              completed_at: new Date().toISOString(),
-            }),
-            correlationId,
-          ]
-        );
+      // Update history record
+      await this.historyRepo.complete(historyId, {
+        recordsDeleted: result.recordsDeleted,
+        partitionsDropped: result.partitionsDropped,
+        gcsFilesDeleted: result.gcsFilesDeleted,
+        status: 'success',
+        completed_at: new Date(),
       });
+
+      // Update policy last_cleanup_at
+      await this.policyRepo.updateLastCleanup(policy.id, new Date());
+
+      // Create outbox event (transactional outbox pattern per ADR-007)
+      const correlationId = uuidv4();
+      await db.query(
+        `
+        INSERT INTO data_retention.outbox
+          (aggregate_id, aggregate_type, event_type, payload, correlation_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+        [
+          policy.id,
+          'RetentionPolicy',
+          'cleanup.completed',
+          JSON.stringify({
+            policy_id: policy.id,
+            target_schema: policy.target_schema,
+            cleanup_strategy: policy.cleanup_strategy,
+            records_deleted: result.recordsDeleted,
+            partitions_dropped: result.partitionsDropped,
+            gcs_files_deleted: result.gcsFilesDeleted,
+            dry_run: dryRun,
+            completed_at: new Date().toISOString(),
+          }),
+          correlationId,
+        ]
+      );
     } catch (error: any) {
       logger.error('CleanupOrchestrator: Strategy failed', {
         policy_id: policy.id,

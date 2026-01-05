@@ -15,12 +15,9 @@ import express from 'express';
 import { Storage } from '@google-cloud/storage';
 import { config } from './config';
 import { logger } from './config/logger';
-import { db } from './database/client';
 import { healthRoutes } from './api/health-routes';
 import { metricsRoutes } from './api/metrics-routes';
 import { CleanupOrchestrator } from './services/cleanup-orchestrator';
-import { RetentionPolicyRepository } from './repositories/retention-policy.repository';
-import { CleanupHistoryRepository } from './repositories/cleanup-history.repository';
 import { PartitionDropStrategy } from './strategies/partition-drop.strategy';
 import { DateDeleteStrategy } from './strategies/date-delete.strategy';
 import { GCSCleanupStrategy } from './strategies/gcs-cleanup.strategy';
@@ -44,14 +41,12 @@ const gcsClient = new Storage({
 });
 
 const strategies = new Map();
-strategies.set('partition_drop', new PartitionDropStrategy(db));
-strategies.set('date_delete', new DateDeleteStrategy(db));
+strategies.set('partition_drop', new PartitionDropStrategy());
+strategies.set('date_delete', new DateDeleteStrategy());
 strategies.set('gcs_cleanup', new GCSCleanupStrategy(gcsClient));
 
-// Initialize repositories and orchestrator
-const policyRepo = new RetentionPolicyRepository(db);
-const historyRepo = new CleanupHistoryRepository(db);
-const orchestrator = new CleanupOrchestrator(policyRepo, historyRepo, db, strategies);
+// Initialize orchestrator
+const orchestrator = new CleanupOrchestrator(strategies);
 
 // Main execution function
 async function executeCleanup() {
