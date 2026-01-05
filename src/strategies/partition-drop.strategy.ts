@@ -79,7 +79,8 @@ export class PartitionDropStrategy implements CleanupStrategy {
 
   private async dropPartition(schema: string, partitionName: string): Promise<void> {
     // Use identifier quoting for safety (schema.tablename)
-    const query = `DROP TABLE IF EXISTS "${schema}"."${partitionName}"`;
+    // CASCADE drops dependent objects (indexes, etc.)
+    const query = `DROP TABLE IF EXISTS "${schema}"."${partitionName}" CASCADE`;
     await db.query(query);
   }
 }
