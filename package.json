@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.7.0",
-    "@railrepay/metrics-pusher": "^1.0.1",
+    "@railrepay/metrics-pusher": "^1.1.0",
     "@railrepay/postgres-client": "^1.0.0",
     "@railrepay/winston-logger": "^1.0.0",
     "dotenv": "^16.3.1",
