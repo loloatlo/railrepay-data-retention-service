@@ -178,7 +178,7 @@ exports.up = async (pgm) => {
     INSERT INTO data_retention.retention_policies (target_schema, retention_days, cleanup_strategy, enabled)
     VALUES
       ('darwin_ingestor', 31, 'partition_drop', true),
-      ('darwin_ingestor_outbox', 31, 'date_delete', true),
+      ('darwin_ingestor_outbox', 7, 'date_delete', true),
       ('timetable_loader', 31, 'date_delete', true),
       ('gcs_gtfs_archive', 31, 'gcs_cleanup', true)
     ON CONFLICT (target_schema) DO NOTHING;
