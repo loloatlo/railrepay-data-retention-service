@@ -72,6 +72,14 @@ export class DateDeleteStrategy implements CleanupStrategy {
       { schema: 'timetable_loader', table: 'gtfs_generation_log', dateColumn: 'generation_date' },
       { schema: 'timetable_loader', table: 'gtfs_archives', dateColumn: 'generation_date' },
     ]],
+    // darwin_ingestor: delay tables — BL-345 32-day rolling retention.
+    // delay_service_stops has ON DELETE CASCADE FK to delay_services, so child first.
+    // service_date is a DATE column and the partition key; Postgres partition pruning
+    // ensures the DELETE only scans expired monthly partitions, not current ones.
+    ['darwin_ingestor', [
+      { schema: 'darwin_ingestor', table: 'delay_service_stops', dateColumn: 'service_date' },
+      { schema: 'darwin_ingestor', table: 'delay_services', dateColumn: 'service_date' },
+    ]],
     // darwin_ingestor_outbox: outbox_events table
     // BL-346: MUST only delete PUBLISHED rows (published_at IS NOT NULL).
     // The safetyPredicate guards against deleting unpublished events (data-loss prevention).
